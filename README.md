@@ -97,6 +97,7 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
   "localApiKeys": ["change-me-local-key"],
   "strategy": "round-robin",
   "stickyRequests": 3,
+  "maxBodyBytes": 26214400,
   "upstream": {
     "baseUrl": "https://api.openai.com/v1",
     "timeoutMs": 600000

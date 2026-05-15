@@ -7,6 +7,7 @@
   "localApiKeys": ["change-me-local-key"],
   "strategy": "round-robin",
   "stickyRequests": 3,
+  "maxBodyBytes": 26214400,
   "upstream": {
     "baseUrl": "https://api.openai.com/v1",
     "timeoutMs": 600000

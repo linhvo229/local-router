@@ -43,6 +43,18 @@ export class AccountPool {
     return this.pickRoundRobin(candidates);
   }
 
+  pickAny({ excluded = new Set() } = {}) {
+    const candidates = this.config.accounts
+      .filter((account) => account.enabled !== false)
+      .filter((account) => !excluded.has(account.id))
+      .filter((account) => !this.isLocked(account.id, null))
+      .sort((a, b) => (a.priority || 999) - (b.priority || 999));
+
+    if (candidates.length === 0) return null;
+    if (this.config.strategy === "fill-first") return candidates[0];
+    return this.pickRoundRobin(candidates);
+  }
+
   pickRoundRobin(candidates) {
     const stickyLimit = Math.max(1, Number(this.config.stickyRequests || 1));
     const byRecent = [...candidates].sort((a, b) => {

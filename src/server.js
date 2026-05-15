@@ -25,12 +25,12 @@ async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const headers = lowerHeaders(req.headers);
 
-  if (req.method === "GET" && url.pathname === "/health") {
-    return sendJson(res, 200, { ok: true, accounts: pool.list() });
-  }
-
   if (config.requireApiKey && !isAuthorized(headers)) {
     return sendJson(res, 401, { error: { message: "Missing or invalid local API key" } });
+  }
+
+  if (req.method === "GET" && url.pathname === "/health") {
+    return sendJson(res, 200, { ok: true, accounts: pool.list() });
   }
 
   if (req.method === "GET" && url.pathname === "/v1/models") {
@@ -43,9 +43,11 @@ async function handleRequest(req, res) {
 
   let body;
   try {
-    body = await readJson(req);
-  } catch {
-    return sendJson(res, 400, { error: { message: "Invalid JSON body" } });
+    body = await readJson(req, { maxBytes: Number(config.maxBodyBytes) });
+  } catch (error) {
+    const status = error.statusCode || 400;
+    const message = status === 413 ? error.message : "Invalid JSON body";
+    return sendJson(res, status, { error: { message } });
   }
 
   const model = body?.model;
@@ -79,7 +81,7 @@ async function handleRequest(req, res) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Number(config.upstream?.timeoutMs || 600000));
-    req.on("close", () => controller.abort());
+    req.on("aborted", () => controller.abort());
 
     let upstream;
     try {
@@ -117,7 +119,7 @@ async function handleRequest(req, res) {
 }
 
 async function proxyWithoutAccountFallback(req, res) {
-  const account = pool.pick({ model: "*" });
+  const account = pool.pickAny();
   if (!account) return sendJson(res, 503, { error: { message: "No account available" } });
   const apiKey = pool.resolveApiKey(account);
   const upstream = await proxyOpenAI({ req, body: undefined, account, apiKey, config });

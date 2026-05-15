@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AccountPool } from "../src/accounts.js";
+import { readJson } from "../src/http.js";
 import { globMatch, matchesModel } from "../src/match.js";
 
 const config = {
@@ -36,4 +37,21 @@ test("AccountPool skips accounts outside model allowlist", () => {
   const pool = new AccountPool(config, { warn() {} });
   const account = pool.pick({ model: "gpt-4o" });
   assert.equal(account.id, "b");
+});
+
+test("pickAny is not constrained by model allowlists", () => {
+  const pool = new AccountPool(config, { warn() {} });
+  const account = pool.pickAny();
+  assert.equal(account.id, "a");
+});
+
+test("readJson rejects bodies over maxBytes", async () => {
+  async function* req() {
+    yield Buffer.from('{"model":"gpt-4o-mini"}');
+  }
+
+  await assert.rejects(
+    () => readJson(req(), { maxBytes: 5 }),
+    (error) => error.statusCode === 413,
+  );
 });

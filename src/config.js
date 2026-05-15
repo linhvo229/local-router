@@ -8,6 +8,7 @@ const DEFAULT_CONFIG = {
   localApiKeys: [],
   strategy: "round-robin",
   stickyRequests: 3,
+  maxBodyBytes: 25 * 1024 * 1024,
   upstream: { baseUrl: "https://api.openai.com/v1", timeoutMs: 600000 },
   cooldown: { rateLimitSeconds: 300, authErrorSeconds: 3600, serverErrorSeconds: 60 },
   privacy: { logBodies: false, logHeaders: false },
@@ -73,6 +74,9 @@ function validateConfig(config) {
   }
   if (!["round-robin", "fill-first"].includes(config.strategy)) {
     throw new Error("strategy must be round-robin or fill-first");
+  }
+  if (!Number.isFinite(Number(config.maxBodyBytes)) || Number(config.maxBodyBytes) <= 0) {
+    throw new Error("maxBodyBytes must be a positive number");
   }
 
   const ids = new Set();

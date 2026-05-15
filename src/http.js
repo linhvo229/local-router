@@ -25,9 +25,18 @@ export function pipeResponse(upstream, res, extraHeaders = {}) {
   })).catch((error) => res.destroy(error));
 }
 
-export async function readJson(req) {
+export async function readJson(req, { maxBytes = 25 * 1024 * 1024 } = {}) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      const error = new Error(`Request body too large: ${total} bytes`);
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
   if (chunks.length === 0) return undefined;
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
