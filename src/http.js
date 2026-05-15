@@ -1,9 +1,11 @@
+import { Readable } from "node:stream";
+
 export function sendJson(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
 }
 
-export function pipeResponse(upstream, res, extraHeaders = {}) {
+export async function pipeResponse(upstream, res, extraHeaders = {}) {
   const headers = {};
   for (const [key, value] of upstream.headers.entries()) {
     if (["content-encoding", "content-length", "transfer-encoding", "connection"].includes(key.toLowerCase())) continue;
@@ -12,17 +14,17 @@ export function pipeResponse(upstream, res, extraHeaders = {}) {
   Object.assign(headers, extraHeaders);
   res.writeHead(upstream.status, headers);
   if (!upstream.body) return res.end();
-  upstream.body.pipeTo(new WritableStream({
-    write(chunk) {
-      res.write(Buffer.from(chunk));
-    },
-    close() {
-      res.end();
-    },
-    abort(error) {
+
+  return new Promise((resolve, reject) => {
+    const stream = Readable.fromWeb(upstream.body);
+    stream.on("error", (error) => {
       res.destroy(error);
-    },
-  })).catch((error) => res.destroy(error));
+      reject(error);
+    });
+    res.on("error", reject);
+    res.on("finish", resolve);
+    stream.pipe(res);
+  });
 }
 
 export async function readJson(req, { maxBytes = 25 * 1024 * 1024 } = {}) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import http from "node:http";
+import crypto from "node:crypto";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { AccountPool } from "./accounts.js";
@@ -34,7 +35,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/v1/models") {
-    return proxyWithoutAccountFallback(req, res);
+    return proxyWithAccountFallback(req, res, { model: null, body: undefined });
   }
 
   if (req.method !== "POST" || !isSupportedPath(url.pathname)) {
@@ -57,12 +58,16 @@ async function handleRequest(req, res) {
   logger.body("client body", body);
   logger.headers("client headers", headers);
 
+  return proxyWithAccountFallback(req, res, { model, body });
+}
+
+async function proxyWithAccountFallback(req, res, { model, body }) {
   const excluded = new Set();
   let lastError = "No account available";
   let lastStatus = 503;
 
   while (true) {
-    const account = pool.pick({ model, excluded });
+    const account = model ? pool.pick({ model, excluded }) : pool.pickAny({ excluded });
     if (!account) {
       return sendJson(res, lastStatus, { error: { message: lastError } });
     }
@@ -77,11 +82,11 @@ async function handleRequest(req, res) {
     }
 
     pool.markSelected(account.id);
-    logger.info(`Routing ${model} via ${account.name || account.id}`);
+    logger.info(`Routing ${model || "models"} via ${account.name || account.id}`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Number(config.upstream?.timeoutMs || 600000));
-    req.on("aborted", () => controller.abort());
+    req.on("aborted", () => controller.abort(), { once: true });
 
     let upstream;
     try {
@@ -101,7 +106,6 @@ async function handleRequest(req, res) {
 
     if (upstream.response.ok) {
       pool.markSuccess(account.id, model);
-      res.setHeader("x-local-router-account", account.id);
       return pipeResponse(upstream.response, res, { "x-local-router-account": account.id });
     }
 
@@ -118,14 +122,6 @@ async function handleRequest(req, res) {
   }
 }
 
-async function proxyWithoutAccountFallback(req, res) {
-  const account = pool.pickAny();
-  if (!account) return sendJson(res, 503, { error: { message: "No account available" } });
-  const apiKey = pool.resolveApiKey(account);
-  const upstream = await proxyOpenAI({ req, body: undefined, account, apiKey, config });
-  return pipeResponse(upstream.response, res, { "x-local-router-account": account.id });
-}
-
 function isSupportedPath(pathname) {
   return pathname === "/v1/chat/completions" || pathname === "/v1/responses";
 }
@@ -134,7 +130,13 @@ function isAuthorized(headers) {
   const auth = headers.authorization || "";
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   const key = bearer || headers["x-api-key"];
-  return key && config.localApiKeys.includes(key);
+  return Boolean(key && config.localApiKeys.some((localKey) => safeEqual(key, localKey)));
+}
+
+function safeEqual(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 server.listen(config.listen.port, config.listen.host, () => {

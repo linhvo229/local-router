@@ -62,7 +62,15 @@ export function loadConfig(logger = console) {
 
   const config = deepMerge(DEFAULT_CONFIG, userConfig);
   validateConfig(config);
+  warnPublicBind(config, logger);
   return config;
+}
+
+function warnPublicBind(config, logger) {
+  const host = config.listen?.host;
+  if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
+    logger.warn(`listen.host is ${host}; this may expose local-router beyond this machine. Prefer 127.0.0.1 unless you have a firewall and strong localApiKeys.`);
+  }
 }
 
 function validateConfig(config) {
