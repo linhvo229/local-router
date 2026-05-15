@@ -19,11 +19,11 @@ cp config.example.json config.json
 chmod 600 config.json
 ```
 
-Edit `config.json`, then export the upstream OpenAI keys referenced by `apiKeyEnv`:
+Edit `config.json`, replace `PASTE_OPENAI_API_KEY_HERE` with your OpenAI API key, and change `localApiKeys` from the default placeholder.
+
+Then start the router:
 
 ```bash
-export OPENAI_KEY_WORK_1="sk-..."
-export OPENAI_KEY_PERSONAL_1="sk-..."
 npm start
 ```
 
@@ -40,22 +40,9 @@ Copy-Item config.example.json config.json
 notepad config.json
 ```
 
-Set the upstream OpenAI keys for the current PowerShell session:
+Replace `PASTE_OPENAI_API_KEY_HERE` in `config.json` with your OpenAI API key, and change `localApiKeys` from the default placeholder.
 
-```powershell
-$env:OPENAI_KEY_WORK_1="sk-..."
-$env:OPENAI_KEY_PERSONAL_1="sk-..."
-npm start
-```
-
-Or persist them for future terminals:
-
-```powershell
-setx OPENAI_KEY_WORK_1 "sk-..."
-setx OPENAI_KEY_PERSONAL_1 "sk-..."
-```
-
-Close and reopen PowerShell after `setx`, then run:
+Then start the router:
 
 ```powershell
 npm start
@@ -73,7 +60,7 @@ macOS/Linux curl:
 
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
-  -H 'Authorization: Bearer change-me-local-key' \
+  -H 'Authorization: Bearer local-router-key-change-me' \
   -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 ```
@@ -83,7 +70,7 @@ Windows PowerShell curl:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
   -Method Post `
-  -Headers @{ Authorization = "Bearer change-me-local-key" } `
+  -Headers @{ Authorization = "Bearer local-router-key-change-me" } `
   -ContentType "application/json" `
   -Body '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 ```
@@ -94,7 +81,7 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
 {
   "listen": { "host": "127.0.0.1", "port": 8787 },
   "requireApiKey": true,
-  "localApiKeys": ["change-me-local-key"],
+  "localApiKeys": ["local-router-key-change-me"],
   "strategy": "round-robin",
   "stickyRequests": 3,
   "maxBodyBytes": 26214400,
@@ -104,11 +91,12 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
   },
   "accounts": [
     {
-      "id": "work-1",
-      "apiKeyEnv": "OPENAI_KEY_WORK_1",
+      "id": "openai-1",
+      "name": "OpenAI Account 1",
+      "apiKey": "PASTE_OPENAI_API_KEY_HERE",
       "priority": 1,
       "enabled": true,
-      "models": { "allow": ["gpt-5*", "gpt-4.1*"] }
+      "models": { "allow": ["*"] }
     }
   ]
 }
@@ -117,8 +105,8 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
 Account fields:
 
 - `id`: stable local account id shown in `x-local-router-account`.
-- `apiKeyEnv`: environment variable containing the OpenAI API key.
-- `apiKey`: inline key, supported but not recommended.
+- `apiKey`: inline OpenAI API key. Convenient, but keep `config.json` private.
+- `apiKeyEnv`: environment variable containing the OpenAI API key, if you prefer not to store the key in JSON.
 - `priority`: lower number is preferred for `fill-first` and tie-breaking.
 - `models.allow`: glob-style allowlist, for example `gpt-5*` or `*`.
 - `models.deny`: optional glob-style denylist.
@@ -134,7 +122,7 @@ Account fields:
 ## Health
 
 ```bash
-curl -H 'Authorization: Bearer change-me-local-key' http://127.0.0.1:8787/health
+curl -H 'Authorization: Bearer local-router-key-change-me' http://127.0.0.1:8787/health
 ```
 
 ## Test
