@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 import http from "node:http";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { AccountPool } from "./accounts.js";
 import { proxyOpenAI, readUpstreamError } from "./openai.js";
+import { proxyCodex, readCodexError } from "./codex/proxy.js";
+import { ensureCodexAccessToken } from "./codex/token.js";
 import { lowerHeaders, pipeResponse, readJson, sendJson } from "./http.js";
 
 const BOOT_LOGGER = createLogger({ privacy: { logBodies: false, logHeaders: false } });
@@ -72,9 +77,9 @@ async function proxyWithAccountFallback(req, res, { model, body }) {
       return sendJson(res, lastStatus, { error: { message: lastError } });
     }
 
-    let apiKey;
+    let credential;
     try {
-      apiKey = pool.resolveApiKey(account);
+      credential = await resolveCredential(account);
     } catch (error) {
       excluded.add(account.id);
       lastError = error.message;
@@ -90,7 +95,7 @@ async function proxyWithAccountFallback(req, res, { model, body }) {
 
     let upstream;
     try {
-      upstream = await proxyOpenAI({ req, body, account, apiKey, config, signal: controller.signal });
+      upstream = await proxyByProvider({ req, body, account, credential, signal: controller.signal });
     } catch (error) {
       clearTimeout(timeout);
       lastError = error.name === "AbortError" ? "Upstream request aborted or timed out" : error.message;
@@ -109,10 +114,11 @@ async function proxyWithAccountFallback(req, res, { model, body }) {
       return pipeResponse(upstream.response, res, { "x-local-router-account": account.id });
     }
 
-    const errorMessage = await readUpstreamError(upstream.response);
+    const errorInfo = await readProviderError(account, upstream.response);
+    const errorMessage = errorInfo.message;
     lastError = `[${account.id}] ${errorMessage}`;
     lastStatus = upstream.response.status;
-    const decision = pool.markFailure(account.id, model, upstream.response.status);
+    const decision = pool.markFailure(account.id, model, upstream.response.status, { untilMs: errorInfo.resetsAtMs });
     if (decision.shouldFallback) {
       excluded.add(account.id);
       continue;
@@ -120,6 +126,36 @@ async function proxyWithAccountFallback(req, res, { model, body }) {
 
     return sendJson(res, upstream.response.status, { error: { message: errorMessage } });
   }
+}
+
+async function resolveCredential(account) {
+  if ((account.provider || "openai") === "codex") {
+    return ensureCodexAccessToken(account, { onRefresh: saveRuntimeConfig });
+  }
+  return pool.resolveApiKey(account);
+}
+
+function proxyByProvider({ req, body, account, credential, signal }) {
+  if ((account.provider || "openai") === "codex") {
+    return proxyCodex({ req, body, account, accessToken: credential, signal });
+  }
+  return proxyOpenAI({ req, body, account, apiKey: credential, config, signal });
+}
+
+async function readProviderError(account, response) {
+  if ((account.provider || "openai") === "codex") return readCodexError(response);
+  return { message: await readUpstreamError(response), resetsAtMs: null };
+}
+
+async function saveRuntimeConfig() {
+  const configPath = expandHome(process.env.LOCAL_ROUTER_CONFIG || "./config.json");
+  if (!fs.existsSync(configPath)) return;
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+function expandHome(filePath) {
+  if (!filePath || !filePath.startsWith("~")) return filePath;
+  return path.join(os.homedir(), filePath.slice(1));
 }
 
 function isSupportedPath(pathname) {

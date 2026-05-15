@@ -92,8 +92,16 @@ function validateConfig(config) {
     if (!account.id) throw new Error("Every account needs an id");
     if (ids.has(account.id)) throw new Error(`Duplicate account id: ${account.id}`);
     ids.add(account.id);
-    if (!account.apiKey && !account.apiKeyEnv) {
-      throw new Error(`Account ${account.id} needs apiKey or apiKeyEnv`);
+    const provider = account.provider || "openai";
+    if (!["openai", "codex"].includes(provider)) throw new Error(`Account ${account.id} has unsupported provider: ${provider}`);
+    if (provider === "openai" && !account.apiKey && !account.apiKeyEnv) {
+      throw new Error(`OpenAI account ${account.id} needs apiKey or apiKeyEnv`);
+    }
+    if (provider === "codex" && account.authType !== "oauth") {
+      throw new Error(`Codex account ${account.id} needs authType=oauth`);
+    }
+    if (provider === "codex" && !account.accessToken && !account.refreshToken) {
+      throw new Error(`Codex account ${account.id} needs accessToken or refreshToken`);
     }
   }
 }

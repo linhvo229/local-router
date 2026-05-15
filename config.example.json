@@ -25,6 +25,7 @@
     {
       "id": "openai-1",
       "name": "OpenAI Account 1",
+      "provider": "openai",
       "apiKey": "PASTE_OPENAI_API_KEY_HERE",
       "priority": 1,
       "enabled": true,

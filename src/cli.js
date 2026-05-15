@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { codexLogin } from "./codex/oauth.js";
+import { ensureCodexAccessToken } from "./codex/token.js";
+import { getCodexQuota } from "./codex/quota.js";
 
 const CONFIG_PATH = process.env.LOCAL_ROUTER_CONFIG || "config.json";
 
@@ -15,6 +17,10 @@ async function main() {
   if (command === "init") return initConfig(args);
   if (command === "account" && subcommand === "list") return listAccounts();
   if (command === "account" && subcommand === "add") return addAccount(args);
+  if (command === "codex" && subcommand === "login") return codexLoginCommand(args);
+  if (command === "codex" && subcommand === "list") return listCodexAccounts();
+  if (command === "codex" && subcommand === "logout") return codexLogout(args);
+  if (command === "quota") return quotaCommand([subcommand, ...args].filter(Boolean));
 
   console.error(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
   printHelp();
@@ -29,6 +35,10 @@ Usage:
   local-router init [--force]
   local-router account list
   local-router account add [--id openai-2] [--name "OpenAI 2"] [--key sk-...] [--env OPENAI_API_KEY]
+  local-router codex login [--id codex-1] [--name "Codex 1"]
+  local-router codex list
+  local-router codex logout --id codex-1
+  local-router quota [--account codex-1] [--json]
 
 Environment:
   LOCAL_ROUTER_CONFIG  Path to config.json (default: ./config.json)
@@ -36,9 +46,7 @@ Environment:
 }
 
 function readConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    throw new Error(`Config not found: ${CONFIG_PATH}. Run: local-router init`);
-  }
+  if (!fs.existsSync(CONFIG_PATH)) throw new Error(`Config not found: ${CONFIG_PATH}. Run: local-router init`);
   return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
 }
 
@@ -64,24 +72,22 @@ function parseFlags(args) {
 
 async function initConfig(args) {
   const flags = parseFlags(args);
-  if (fs.existsSync(CONFIG_PATH) && !flags.force) {
-    throw new Error(`${CONFIG_PATH} already exists. Use --force to overwrite.`);
-  }
-
+  if (fs.existsSync(CONFIG_PATH) && !flags.force) throw new Error(`${CONFIG_PATH} already exists. Use --force to overwrite.`);
   const examplePath = new URL("../config.example.json", import.meta.url);
   const config = JSON.parse(fs.readFileSync(examplePath, "utf8"));
   config.localApiKeys = [`local-${crypto.randomBytes(24).toString("base64url")}`];
   writeConfig(config);
   console.log(`Created ${CONFIG_PATH}`);
-  console.log("Next: edit config.json and replace PASTE_OPENAI_API_KEY_HERE with your OpenAI API key.");
+  console.log("Next: edit config.json and replace PASTE_OPENAI_API_KEY_HERE with your OpenAI API key, or run codex login.");
 }
 
 async function listAccounts() {
   const config = readConfig();
   for (const account of config.accounts || []) {
-    const keySource = account.apiKeyEnv ? `env:${account.apiKeyEnv}` : account.apiKey ? "inline" : "missing";
+    const provider = account.provider || "openai";
+    const keySource = provider === "codex" ? "oauth" : account.apiKeyEnv ? `env:${account.apiKeyEnv}` : account.apiKey ? "inline" : "missing";
     const status = account.enabled === false ? "disabled" : "enabled";
-    console.log(`${account.id}\t${status}\tpriority=${account.priority ?? 999}\tkey=${keySource}\t${account.name || ""}`);
+    console.log(`${account.id}\t${provider}\t${status}\tpriority=${account.priority ?? 999}\tkey=${keySource}\t${account.name || ""}`);
   }
 }
 
@@ -101,11 +107,11 @@ async function addAccount(args) {
     const key = flags.key || (env ? "" : await rl.question("OpenAI API key (input is visible): "));
     if (!env && !key) throw new Error("Provide --env or an API key");
 
-    const priority = Number(flags.priority || config.accounts.length + 1);
     const account = {
       id,
       name,
-      priority,
+      provider: "openai",
+      priority: Number(flags.priority || config.accounts.length + 1),
       enabled: true,
       models: { allow: ["*"] },
     };
@@ -118,6 +124,85 @@ async function addAccount(args) {
   } finally {
     rl.close();
   }
+}
+
+async function codexLoginCommand(args) {
+  const flags = parseFlags(args);
+  const config = readConfig();
+  config.accounts ||= [];
+  const id = flags.id || "codex-1";
+  if (config.accounts.some((account) => account.id === id)) throw new Error(`Account already exists: ${id}`);
+
+  const tokens = await codexLogin();
+  config.accounts.push({
+    id,
+    name: flags.name || id,
+    provider: "codex",
+    authType: "oauth",
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: tokens.expiresAt,
+    priority: Number(flags.priority || config.accounts.length + 1),
+    enabled: true,
+    models: { allow: ["gpt-*-codex*"] },
+  });
+  writeConfig(config);
+  console.log(`Added Codex account ${id} to ${CONFIG_PATH}`);
+}
+
+async function listCodexAccounts() {
+  const config = readConfig();
+  for (const account of codexAccounts(config)) {
+    const status = account.enabled === false ? "disabled" : "enabled";
+    console.log(`${account.id}\t${status}\texpires=${account.expiresAt || "unknown"}\t${account.name || ""}`);
+  }
+}
+
+async function codexLogout(args) {
+  const flags = parseFlags(args);
+  if (!flags.id) throw new Error("codex logout requires --id");
+  const config = readConfig();
+  const before = config.accounts?.length || 0;
+  config.accounts = (config.accounts || []).filter((account) => !(account.id === flags.id && (account.provider || "openai") === "codex"));
+  if (config.accounts.length === before) throw new Error(`Codex account not found: ${flags.id}`);
+  writeConfig(config);
+  console.log(`Removed Codex account ${flags.id}`);
+}
+
+async function quotaCommand(args) {
+  const flags = parseFlags(args);
+  const config = readConfig();
+  let accounts = codexAccounts(config);
+  if (flags.account) accounts = accounts.filter((account) => account.id === flags.account);
+  if (accounts.length === 0) throw new Error("No Codex accounts found");
+
+  const rows = [];
+  for (const account of accounts) {
+    const accessToken = await ensureCodexAccessToken(account, { onRefresh: () => writeConfig(config) });
+    const quota = await getCodexQuota(accessToken);
+    rows.push({ id: account.id, provider: "codex", ...quota });
+  }
+  if (flags.json) return console.log(JSON.stringify(rows, null, 2));
+  printQuotaRows(rows);
+}
+
+function codexAccounts(config) {
+  return (config.accounts || []).filter((account) => (account.provider || "openai") === "codex");
+}
+
+function printQuotaRows(rows) {
+  console.log("Account\tPlan\tSession\tWeekly\tReview Session\tReview Weekly");
+  for (const row of rows) {
+    const q = row.quotas || {};
+    console.log([row.id, row.plan || "unknown", formatQuota(q.session), formatQuota(q.weekly), formatQuota(q.review_session), formatQuota(q.review_weekly)].join("\t"));
+  }
+}
+
+function formatQuota(quota) {
+  if (!quota) return "-";
+  const remaining = quota.remaining == null ? "?" : `${quota.remaining}%`;
+  const reset = quota.resetAt ? ` reset ${quota.resetAt}` : "";
+  return `${remaining} left${reset}`;
 }
 
 main().catch((error) => {

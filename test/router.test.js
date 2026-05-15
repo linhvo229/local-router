@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AccountPool } from "../src/accounts.js";
+import { buildCodexAuthUrl, generatePkce } from "../src/codex/oauth.js";
+import { parseCodexQuota } from "../src/codex/quota.js";
+import { transformCodexRequest } from "../src/codex/transform.js";
 import { readJson } from "../src/http.js";
 import { globMatch, matchesModel } from "../src/match.js";
 
@@ -54,4 +57,50 @@ test("readJson rejects bodies over maxBytes", async () => {
     () => readJson(req(), { maxBytes: 5 }),
     (error) => error.statusCode === 413,
   );
+});
+
+
+test("Codex OAuth URL includes PKCE and Codex params", () => {
+  const pkce = generatePkce();
+  assert.equal(pkce.codeVerifier.length > 20, true);
+  const authUrl = new URL(buildCodexAuthUrl({ codeChallenge: "challenge", state: "state" }));
+  assert.equal(authUrl.hostname, "auth.openai.com");
+  assert.equal(authUrl.searchParams.get("client_id"), "app_EMoamEEZ73f0CkXaXp7hrann");
+  assert.equal(authUrl.searchParams.get("code_challenge"), "challenge");
+  assert.equal(authUrl.searchParams.get("codex_cli_simplified_flow"), "true");
+});
+
+test("parseCodexQuota normalizes session and review windows", () => {
+  const quota = parseCodexQuota({
+    plan_type: "plus",
+    rate_limit: {
+      session: { used_percent: 30, reset_at: 2000000000 },
+      weekly: { remaining_percent: 40, reset_at: 2000000000 },
+    },
+    rate_limits_by_limit_id: {
+      codex_review: {
+        session: { used_percent: 10 },
+        weekly: { remaining_percent: 80 },
+      },
+    },
+  });
+  assert.equal(quota.plan, "plus");
+  assert.equal(quota.quotas.session.remaining, 70);
+  assert.equal(quota.quotas.weekly.used, 60);
+  assert.equal(quota.quotas.review_session.remaining, 90);
+  assert.equal(quota.quotas.review_weekly.used, 20);
+});
+
+test("transformCodexRequest forces Codex response shape", () => {
+  const transformed = transformCodexRequest("/v1/responses", {
+    model: "gpt-5.3-codex-high",
+    input: "hello",
+    temperature: 1,
+  }, "gpt-5.3-codex-high");
+  assert.equal(transformed.model, "gpt-5.3-codex");
+  assert.equal(transformed.stream, true);
+  assert.equal(transformed.store, false);
+  assert.equal(transformed.reasoning.effort, "high");
+  assert.equal(transformed.include.includes("reasoning.encrypted_content"), true);
+  assert.equal("temperature" in transformed, false);
 });

@@ -1,6 +1,6 @@
 # local-router
 
-A small local OpenAI account router with safe defaults. It exposes an OpenAI-compatible local endpoint and routes requests across multiple OpenAI API keys/accounts.
+A small local OpenAI-compatible router with safe defaults. It routes requests across OpenAI API key accounts and optional Codex OAuth accounts.
 
 ## Quick Start
 
@@ -34,11 +34,11 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 
 ## Goals
 
-- Route `/v1/chat/completions`, `/v1/responses`, and `/v1/models` to OpenAI.
-- Switch between multiple OpenAI accounts with `round-robin` or `fill-first`.
-- Fallback to another account on `429`, `401`, `403`, `5xx`, or network errors.
-- Bind to localhost by default and require a local API key.
-- Avoid logging request/response bodies by default.
+- Route `/v1/chat/completions`, `/v1/responses`, and `/v1/models` to OpenAI API key accounts.
+- Route Codex `/v1/responses` models through ChatGPT/Codex OAuth accounts.
+- Show Codex provider quota windows: session, weekly, review session, and review weekly.
+- Switch between accounts with `round-robin` or `fill-first` and fallback on upstream errors.
+- Bind to localhost by default, require a local API key, and avoid body/header logging by default.
 
 ## CLI
 
@@ -47,6 +47,8 @@ node src/cli.js init
 node src/cli.js account list
 node src/cli.js account add --id openai-2 --name "OpenAI 2" --key sk-...
 node src/cli.js account add --id work --env OPENAI_API_KEY
+node src/cli.js codex login --id codex-1
+node src/cli.js quota
 node src/cli.js start
 ```
 
@@ -120,6 +122,17 @@ Account fields:
 - `priority`: lower number is preferred for `fill-first` and tie-breaking.
 - `models.allow`: glob-style allowlist, for example `gpt-5*` or `*`.
 - `models.deny`: optional glob-style denylist.
+
+## Codex OAuth
+
+Codex accounts use ChatGPT/Codex OAuth tokens instead of OpenAI `sk-...` API keys:
+
+```bash
+node src/cli.js codex login --id codex-1
+node src/cli.js quota
+```
+
+Codex routing targets `/v1/responses` models matching `gpt-*-codex*` and calls `https://chatgpt.com/backend-api/codex/responses`. It is optional and separate from OpenAI API key routing. `/v1/chat/completions` should use OpenAI API key accounts for now.
 
 ## Privacy And Security
 

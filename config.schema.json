@@ -49,15 +49,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["id"],
-        "anyOf": [
-          { "required": ["apiKey"] },
-          { "required": ["apiKeyEnv"] }
-        ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "name": { "type": "string" },
+          "provider": { "type": "string", "enum": ["openai", "codex"], "default": "openai" },
           "apiKey": { "type": "string" },
           "apiKeyEnv": { "type": "string" },
+          "authType": { "type": "string", "enum": ["oauth"] },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "expiresAt": { "type": ["string", "null"], "format": "date-time" },
           "priority": { "type": "integer", "minimum": 1, "default": 999 },
           "enabled": { "type": "boolean", "default": true },
           "models": {

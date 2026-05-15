@@ -96,17 +96,18 @@ export class AccountPool {
     state.locks.delete(lockKey(null));
   }
 
-  markFailure(accountId, model, status) {
+  markFailure(accountId, model, status, options = {}) {
     const seconds = this.cooldownSeconds(status);
-    if (!seconds) return { shouldFallback: false, cooldownSeconds: 0 };
+    const until = options.untilMs || (seconds ? Date.now() + seconds * 1000 : 0);
+    if (!until) return { shouldFallback: false, cooldownSeconds: 0 };
 
     const state = this.state.get(accountId);
     if (!state) return { shouldFallback: false, cooldownSeconds: 0 };
     const key = lockKey(model);
-    const until = Date.now() + seconds * 1000;
     state.locks.set(key, until);
-    this.logger.warn(`Account ${accountId} locked for ${seconds}s`, { status, model: model || "all" });
-    return { shouldFallback: true, cooldownSeconds: seconds };
+    const cooldownSeconds = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    this.logger.warn(`Account ${accountId} locked for ${cooldownSeconds}s`, { status, model: model || "all" });
+    return { shouldFallback: true, cooldownSeconds };
   }
 
   isLocked(accountId, model) {
