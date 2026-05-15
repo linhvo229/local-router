@@ -4,7 +4,7 @@
   "description": "A small local OpenAI account router with safe defaults.",
   "type": "module",
   "bin": {
-    "local-router": "./src/server.js"
+    "local-router": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/server.js",

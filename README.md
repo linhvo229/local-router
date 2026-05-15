@@ -2,26 +2,68 @@
 
 A small local OpenAI account router with safe defaults. It exposes an OpenAI-compatible local endpoint and routes requests across multiple OpenAI API keys/accounts.
 
+## Quick Start
+
+```bash
+git clone https://github.com/linhvo229/local-router.git
+cd local-router
+node src/cli.js init
+```
+
+Edit `config.json`, replace `PASTE_OPENAI_API_KEY_HERE` with your OpenAI API key, then start:
+
+```bash
+npm start
+```
+
+Use this in OpenAI-compatible clients:
+
+```text
+Base URL: http://127.0.0.1:8787/v1
+API key:  the local key in config.json
+```
+
+Test with curl:
+
+```bash
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H 'Authorization: Bearer local-...from-config...' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
+```
+
 ## Goals
 
-- Route `/v1/chat/completions` and `/v1/responses` to OpenAI.
+- Route `/v1/chat/completions`, `/v1/responses`, and `/v1/models` to OpenAI.
 - Switch between multiple OpenAI accounts with `round-robin` or `fill-first`.
 - Fallback to another account on `429`, `401`, `403`, `5xx`, or network errors.
 - Bind to localhost by default and require a local API key.
 - Avoid logging request/response bodies by default.
+
+## CLI
+
+```bash
+node src/cli.js init
+node src/cli.js account list
+node src/cli.js account add --id openai-2 --name "OpenAI 2" --key sk-...
+node src/cli.js account add --id work --env OPENAI_API_KEY
+node src/cli.js start
+```
+
+If installed globally or linked with npm, use `local-router` instead of `node src/cli.js`.
+
+`init` creates `config.json` from `config.example.json` and generates a random local API key. It will not overwrite an existing config unless you pass `--force`.
 
 ## Setup On macOS/Linux
 
 ```bash
 git clone https://github.com/linhvo229/local-router.git
 cd local-router
-cp config.example.json config.json
+node src/cli.js init
 chmod 600 config.json
 ```
 
-Edit `config.json`, replace `PASTE_OPENAI_API_KEY_HERE` with your OpenAI API key, and change `localApiKeys` from the default placeholder.
-
-Then start the router:
+Edit `config.json`, replace `PASTE_OPENAI_API_KEY_HERE` with your OpenAI API key, then start:
 
 ```bash
 npm start
@@ -36,46 +78,14 @@ PowerShell:
 ```powershell
 git clone https://github.com/linhvo229/local-router.git
 cd local-router
-Copy-Item config.example.json config.json
+node src/cli.js init
 notepad config.json
-```
-
-Replace `PASTE_OPENAI_API_KEY_HERE` in `config.json` with your OpenAI API key, and change `localApiKeys` from the default placeholder.
-
-Then start the router:
-
-```powershell
 npm start
 ```
 
-The router listens on:
-
-```text
-http://127.0.0.1:8787/v1
-```
-
-Use the local key from `config.json` as the client API key.
-
-macOS/Linux curl:
-
-```bash
-curl http://127.0.0.1:8787/v1/chat/completions \
-  -H 'Authorization: Bearer local-router-key-change-me' \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
-```
-
-Windows PowerShell curl:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8787/v1/chat/completions `
-  -Method Post `
-  -Headers @{ Authorization = "Bearer local-router-key-change-me" } `
-  -ContentType "application/json" `
-  -Body '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
-```
-
 ## Config
+
+VS Code can use `config.schema.json` for autocomplete/validation. The default config looks like:
 
 ```json
 {
@@ -116,13 +126,13 @@ Account fields:
 - Default bind address is `127.0.0.1`; keep it local unless you know why you need remote access.
 - `requireApiKey` defaults to true; change the example local key before real use.
 - Request and response bodies are not stored and not logged unless `privacy.logBodies=true`.
-- Use `apiKeyEnv` rather than inline `apiKey` for upstream OpenAI keys.
+- Use `apiKeyEnv` rather than inline `apiKey` for upstream OpenAI keys if you want stronger local hygiene.
 - `config.json` is ignored by git; run `chmod 600 config.json` on macOS/Linux.
 
 ## Health
 
 ```bash
-curl -H 'Authorization: Bearer local-router-key-change-me' http://127.0.0.1:8787/health
+curl -H 'Authorization: Bearer local-...from-config...' http://127.0.0.1:8787/health
 ```
 
 ## Test
