@@ -1,0 +1,41 @@
+{
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 8787
+  },
+  "requireApiKey": true,
+  "localApiKeys": ["change-me-local-key"],
+  "strategy": "round-robin",
+  "stickyRequests": 3,
+  "upstream": {
+    "baseUrl": "https://api.openai.com/v1",
+    "timeoutMs": 600000
+  },
+  "cooldown": {
+    "rateLimitSeconds": 300,
+    "authErrorSeconds": 3600,
+    "serverErrorSeconds": 60
+  },
+  "privacy": {
+    "logBodies": false,
+    "logHeaders": false
+  },
+  "accounts": [
+    {
+      "id": "work-1",
+      "name": "Work OpenAI",
+      "apiKeyEnv": "OPENAI_KEY_WORK_1",
+      "priority": 1,
+      "enabled": true,
+      "models": { "allow": ["gpt-5*", "gpt-4.1*"] }
+    },
+    {
+      "id": "personal-1",
+      "name": "Personal OpenAI",
+      "apiKeyEnv": "OPENAI_KEY_PERSONAL_1",
+      "priority": 2,
+      "enabled": true,
+      "models": { "allow": ["*"] }
+    }
+  ]
+}
