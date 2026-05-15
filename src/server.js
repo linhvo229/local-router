@@ -99,6 +99,11 @@ async function proxyWithAccountFallback(req, res, { model, body }) {
     } catch (error) {
       clearTimeout(timeout);
       lastError = error.name === "AbortError" ? "Upstream request aborted or timed out" : error.message;
+      if (error.shouldLockAccount === false) {
+        excluded.add(account.id);
+        lastStatus = error.statusCode || 400;
+        continue;
+      }
       lastStatus = 502;
       const decision = pool.markFailure(account.id, model, 502);
       if (decision.shouldFallback) {

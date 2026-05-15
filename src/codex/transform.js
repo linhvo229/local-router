@@ -4,9 +4,18 @@ export const CODEX_DEFAULT_INSTRUCTIONS = "You are Codex, a coding agent. Be con
 
 const EFFORTS = new Set(["none", "low", "medium", "high", "xhigh"]);
 
+export class UnsupportedCodexPathError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "UnsupportedCodexPathError";
+    this.statusCode = 400;
+    this.shouldLockAccount = false;
+  }
+}
+
 export function transformCodexRequest(pathname, body, model) {
   if (pathname === "/v1/chat/completions") {
-    throw new Error("Codex provider currently supports /v1/responses only. Use an OpenAI API key account for /v1/chat/completions.");
+    throw new UnsupportedCodexPathError("Codex provider currently supports /v1/responses only. Use an OpenAI API key account for /v1/chat/completions.");
   }
   const output = structuredClone(body || {});
   output.model = normalizeModel(output.model || model, output);

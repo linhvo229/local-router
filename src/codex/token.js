@@ -1,6 +1,21 @@
 import { CODEX_CLIENT_ID, CODEX_SCOPE, CODEX_TOKEN_URL, mapTokenResponse } from "./oauth.js";
 
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+const UNRECOVERABLE_REFRESH_ERRORS = new Set([
+  "refresh_token_reused",
+  "invalid_grant",
+  "token_expired",
+  "invalid_token",
+]);
+
+export class CodexReauthRequiredError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = "CodexReauthRequiredError";
+    this.code = code;
+    this.shouldLockAccount = false;
+  }
+}
 
 export function needsRefresh(account, now = Date.now()) {
   if (!account.refreshToken) return false;
@@ -23,6 +38,10 @@ export async function refreshCodexAccount(account) {
   });
   if (!response.ok) {
     const text = await response.text();
+    const code = parseRefreshErrorCode(text);
+    if (UNRECOVERABLE_REFRESH_ERRORS.has(code)) {
+      throw new CodexReauthRequiredError(`Codex refresh token is no longer valid (${code}). Run codex logout/login for account ${account.id}.`, code);
+    }
     throw new Error(`Codex token refresh failed: ${text || response.status}`);
   }
   const mapped = mapTokenResponse(await response.json());
@@ -39,4 +58,13 @@ export async function ensureCodexAccessToken(account, { onRefresh } = {}) {
   }
   if (!account.accessToken) throw new Error(`Missing Codex access token for account ${account.id}`);
   return account.accessToken;
+}
+
+function parseRefreshErrorCode(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed?.error?.code || (typeof parsed?.error === "string" ? parsed.error : null);
+  } catch {
+    return null;
+  }
 }

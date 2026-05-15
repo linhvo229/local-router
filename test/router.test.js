@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { AccountPool } from "../src/accounts.js";
 import { buildCodexAuthUrl, generatePkce } from "../src/codex/oauth.js";
 import { parseCodexQuota } from "../src/codex/quota.js";
-import { transformCodexRequest } from "../src/codex/transform.js";
+import { CodexReauthRequiredError, refreshCodexAccount } from "../src/codex/token.js";
+import { transformCodexRequest, UnsupportedCodexPathError } from "../src/codex/transform.js";
 import { readJson } from "../src/http.js";
 import { globMatch, matchesModel } from "../src/match.js";
 
@@ -103,4 +104,25 @@ test("transformCodexRequest forces Codex response shape", () => {
   assert.equal(transformed.reasoning.effort, "high");
   assert.equal(transformed.include.includes("reasoning.encrypted_content"), true);
   assert.equal("temperature" in transformed, false);
+});
+
+
+test("Codex chat-completions transform is non-locking client error", () => {
+  assert.throws(
+    () => transformCodexRequest("/v1/chat/completions", { model: "gpt-5.3-codex" }, "gpt-5.3-codex"),
+    (error) => error instanceof UnsupportedCodexPathError && error.statusCode === 400 && error.shouldLockAccount === false,
+  );
+});
+
+test("Codex refresh classifies unrecoverable errors", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+  try {
+    await assert.rejects(
+      () => refreshCodexAccount({ id: "codex-1", refreshToken: "refresh" }),
+      (error) => error instanceof CodexReauthRequiredError && error.code === "invalid_grant",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

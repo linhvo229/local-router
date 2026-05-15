@@ -49,6 +49,7 @@ export async function codexLogin() {
 function waitForCallback(expectedState) {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let timeout;
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, "http://localhost:1455");
       if (url.pathname !== "/auth/callback" && url.pathname !== "/callback") {
@@ -60,15 +61,16 @@ function waitForCallback(expectedState) {
       const error = url.searchParams.get("error");
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
-      if (error) return finish(res, false, url.searchParams.get("error_description") || error);
-      if (!code || state !== expectedState) return finish(res, false, "Invalid OAuth callback");
-      finish(res, true, "Codex login complete. You can close this window.");
-      resolve({ code });
+      if (error) return finish({ res, ok: false, message: url.searchParams.get("error_description") || error, reject });
+      if (!code || state !== expectedState) return finish({ res, ok: false, message: "Invalid OAuth callback", reject });
+      finish({ res, ok: true, message: "Codex login complete. You can close this window.", resolve, value: { code } });
     });
 
-    const timeout = setTimeout(() => finish(null, false, "Codex login timed out"), 5 * 60 * 1000);
+    timeout = setTimeout(() => {
+      finish({ ok: false, message: "Codex login timed out", reject });
+    }, 5 * 60 * 1000);
 
-    function finish(res, ok, message) {
+    function finish({ res, ok, message, resolve, reject, value }) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -76,14 +78,20 @@ function waitForCallback(expectedState) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(`<html><body><h1>${ok ? "Success" : "Failed"}</h1><p>${escapeHtml(message)}</p></body></html>`);
       }
-      setTimeout(() => server.close(), 100);
-      if (!ok) reject(new Error(message));
+      const done = () => {
+        if (ok) resolve(value);
+        else reject(new Error(message));
+      };
+      if (server.listening) server.close(done);
+      else done();
     }
 
     server.listen(1455, "127.0.0.1");
     server.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
+      const message = error.code === "EADDRINUSE"
+        ? "Codex OAuth callback port 1455 is busy. Stop the process using it, then retry."
+        : `Codex OAuth callback server failed: ${error.message}`;
+      finish({ ok: false, message, reject });
     });
   });
 }
