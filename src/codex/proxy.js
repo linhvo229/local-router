@@ -86,12 +86,10 @@ function emitCodexLine(controller, encoder, line, id, model) {
 }
 
 function extractTextDelta(event) {
-  if (typeof event.delta === "string") return event.delta;
-  if (typeof event.text === "string") return event.text;
-  if (typeof event.output_text_delta === "string") return event.output_text_delta;
-  if (typeof event.content?.text === "string") return event.content.text;
-  if (typeof event.item?.content?.text === "string") return event.item.content.text;
   if (event.type === "response.output_text.delta" && typeof event.delta === "string") return event.delta;
+  if (event.type === "response.refusal.delta" && typeof event.delta === "string") return event.delta;
+  if (event.type === "response.reasoning_summary_text.delta" && typeof event.delta === "string") return event.delta;
+  if (event.type === "response.output_text.delta" && typeof event.text === "string") return event.text;
   return "";
 }
 
