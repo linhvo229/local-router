@@ -190,7 +190,7 @@ test("transformCodexRequest forces Codex response shape", () => {
   assert.equal(transformed.model, "gpt-5.3-codex");
   assert.equal(transformed.stream, true);
   assert.equal(transformed.store, false);
-  assert.equal(transformed.reasoning_effort, "high");
+  assert.equal("reasoning_effort" in transformed, false);
   assert.equal("reasoning" in transformed, false);
   assert.equal("reasoningSummary" in transformed, false);
   assert.equal("temperature" in transformed, false);
