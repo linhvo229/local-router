@@ -207,6 +207,7 @@ test("transformCodexRequest converts chat completions to responses input", () =>
   assert.equal(transformed.model, "gpt-5.3-codex");
   assert.equal(transformed.instructions, "be brief");
   assert.deepEqual(transformed.input, [{ type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] }]);
+  assert.equal("messages" in transformed, false);
 });
 
 test("Codex refresh classifies unrecoverable errors", async () => {

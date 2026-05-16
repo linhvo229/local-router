@@ -41,11 +41,14 @@ function chatCompletionsToResponses(body) {
       content: toResponseContent(message.content, message.role),
     });
   }
-  return {
+  const output = {
     ...body,
     instructions: instructions.join("\n\n") || body.instructions,
     input,
   };
+  delete output.messages;
+  delete output.input_messages;
+  return output;
 }
 
 function normalizeRole(role) {
