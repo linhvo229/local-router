@@ -91,9 +91,11 @@ function normalizeInput(input) {
 }
 
 function ensureReasoning(body) {
-  const effort = body.reasoning?.effort || body.reasoning_effort;
+  const effort = body.reasoning?.effort || body.reasoning_effort || body.reasoningEffort;
   if (effort && effort !== "none") body.reasoning_effort = effort;
-  delete body.reasoning;
+  for (const key of Object.keys(body)) {
+    if (/^reason/i.test(key) && key !== "reasoning_effort") delete body[key];
+  }
 }
 
 function stripUnsupported(body) {
