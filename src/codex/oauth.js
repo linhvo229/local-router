@@ -74,16 +74,17 @@ function waitForCallback(expectedState) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (res) {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(`<html><body><h1>${ok ? "Success" : "Failed"}</h1><p>${escapeHtml(message)}</p></body></html>`);
-      }
       const done = () => {
         if (ok) resolve(value);
         else reject(new Error(message));
+        closeCallbackServer(server);
       };
-      if (server.listening) server.close(done);
-      else done();
+      if (res) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", Connection: "close" });
+        res.end(`<html><body><h1>${ok ? "Success" : "Failed"}</h1><p>${escapeHtml(message)}</p></body></html>`, done);
+      } else {
+        done();
+      }
     }
 
     server.listen(1455, "127.0.0.1");
@@ -94,6 +95,13 @@ function waitForCallback(expectedState) {
       finish({ ok: false, message, reject });
     });
   });
+}
+
+function closeCallbackServer(server) {
+  if (!server.listening) return;
+  server.closeIdleConnections?.();
+  server.closeAllConnections?.();
+  server.close(() => {});
 }
 
 function escapeHtml(value) {
