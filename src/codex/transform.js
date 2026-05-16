@@ -30,6 +30,7 @@ export function transformCodexRequest(pathname, body, model) {
 
 function normalizeModel(model, body) {
   let result = String(model || "gpt-5.3-codex");
+  result = result.slice(result.lastIndexOf("/") + 1);
   const suffix = result.split("-").at(-1);
   if (EFFORTS.has(suffix)) {
     body.reasoning_effort ||= suffix;

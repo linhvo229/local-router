@@ -33,6 +33,10 @@ test("matchesModel applies allow and deny", () => {
   assert.equal(matchesModel("gpt-4.1", { allow: ["gpt-*"], deny: ["gpt-4*"] }), false);
 });
 
+test("matchesModel accepts provider-prefixed model ids", () => {
+  assert.equal(matchesModel("local-router/gpt-5.3-codex", { allow: ["gpt-*-codex*"] }), true);
+});
+
 test("AccountPool selects eligible accounts and respects cooldown", () => {
   const pool = new AccountPool(config, { warn() {} });
   const first = pool.pick({ model: "gpt-5.1" });
@@ -178,10 +182,10 @@ test("parseCodexQuota normalizes session and review windows", () => {
 
 test("transformCodexRequest forces Codex response shape", () => {
   const transformed = transformCodexRequest("/v1/responses", {
-    model: "gpt-5.3-codex-high",
+    model: "local-router/gpt-5.3-codex-high",
     input: "hello",
     temperature: 1,
-  }, "gpt-5.3-codex-high");
+  }, "local-router/gpt-5.3-codex-high");
   assert.equal(transformed.model, "gpt-5.3-codex");
   assert.equal(transformed.stream, true);
   assert.equal(transformed.store, false);
