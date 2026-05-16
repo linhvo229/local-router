@@ -21,7 +21,9 @@ export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
         signal,
       });
       if (response.ok) {
-        const quota = parseCodexQuota(await response.json());
+        const raw = await response.json();
+        debugQuotaResponse(endpoint, raw);
+        const quota = parseCodexQuota(raw);
         if (hasWeeklyQuota(quota)) return quota;
         fallbackQuota ||= quota;
         continue;
@@ -40,6 +42,24 @@ function hasWeeklyQuota(quota) {
   return Boolean(quota?.quotas?.weekly || quota?.quotas?.review_weekly);
 }
 
+function debugQuotaResponse(endpoint, data) {
+  if (!["1", "true", "yes"].includes(String(process.env.LOCAL_ROUTER_QUOTA_DEBUG || "").toLowerCase())) return;
+  console.error(`[quota debug] ${endpoint}`);
+  console.error(JSON.stringify(collectQuotaKeys(data), null, 2));
+}
+
+function collectQuotaKeys(value, path = "", output = []) {
+  if (!value || typeof value !== "object" || output.length >= 200) return output;
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = path ? `${path}.${key}` : key;
+    if (/limit|quota|weekly|week|session|reset|remain|used|percent|rate/i.test(key)) {
+      output.push({ path: childPath, type: Array.isArray(child) ? "array" : typeof child });
+    }
+    collectQuotaKeys(child, childPath, output);
+  }
+  return output;
+}
+
 function formatFetchError(error) {
   const details = [error.message];
   if (error.cause?.code) details.push(error.cause.code);
@@ -52,7 +72,7 @@ function cleanHeaders(headers) {
 }
 
 export function parseCodexQuota(data) {
-  const normalRateLimit = data.rate_limit || data.rate_limits || data.rate_limits_by_limit_id?.codex || {};
+  const normalRateLimit = data.rate_limit || data.rate_limits || data.rate_limits_by_limit_id?.codex || data;
   const reviewRateLimit = getReviewRateLimit(data);
   const quotas = {};
   appendQuotaWindows(quotas, "", normalRateLimit);
@@ -82,7 +102,7 @@ function appendQuotaWindows(quotas, prefix, rateLimit) {
   const body = rateLimitBody(rateLimit);
   if (!body) return;
   appendWindow(quotas, prefix ? `${prefix}_session` : "session", body, ["session", "primary", "short"]);
-  appendWindow(quotas, prefix ? `${prefix}_weekly` : "weekly", body, ["weekly", "long"]);
+  appendWindow(quotas, prefix ? `${prefix}_weekly` : "weekly", body, ["weekly", "week", "long"]);
 }
 
 function rateLimitBody(value) {
@@ -111,8 +131,29 @@ function pickWindow(body, keys) {
     if (body[key]) return body[key];
     if (body[`${key}_window`]) return body[`${key}_window`];
     if (body[`${key}_limit`]) return body[`${key}_limit`];
+    if (body[`${key}_rate_limit`]) return body[`${key}_rate_limit`];
+  }
+  return findWindow(body, keys);
+}
+
+function findWindow(value, keys, depth = 0) {
+  if (!value || typeof value !== "object" || depth > 6) return null;
+  for (const [key, child] of Object.entries(value)) {
+    if (!child || typeof child !== "object") continue;
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (keys.some((candidate) => normalized.includes(candidate.replace(/[^a-z0-9]/g, ""))) && looksLikeWindow(child)) return child;
+    const nested = findWindow(child, keys, depth + 1);
+    if (nested) return nested;
   }
   return null;
+}
+
+function looksLikeWindow(value) {
+  return [
+    "used_percent", "usedPercentage", "percent_used", "used",
+    "remaining_percent", "remainingPercentage", "percent_remaining", "remaining",
+    "reset_at", "resets_at", "resetAt", "resetsAt", "reset_time",
+  ].some((key) => value[key] != null);
 }
 
 function percent(value) {

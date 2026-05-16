@@ -129,6 +129,20 @@ test("getCodexQuota keeps trying when first endpoint lacks weekly quota", async 
   }
 });
 
+test("parseCodexQuota finds nested weekly windows", () => {
+  const quota = parseCodexQuota({
+    plan_type: "plus",
+    limits: {
+      codex: {
+        session_window: { remaining_percent: 55 },
+        weekly_rate_limit: { used_percent: 25 },
+      },
+    },
+  });
+  assert.equal(quota.quotas.session.remaining, 55);
+  assert.equal(quota.quotas.weekly.remaining, 75);
+});
+
 test("parseCodexQuota normalizes session and review windows", () => {
   const quota = parseCodexQuota({
     plan_type: "plus",
