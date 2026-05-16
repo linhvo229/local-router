@@ -10,9 +10,18 @@ export function configureNetworkFromEnv() {
   // Prefer IPv4 first because Node fetch can fail when IPv6 is advertised but unreachable.
   dns.setDefaultResultOrder?.("ipv4first");
 
-  if (hasProxyEnv()) {
-    setGlobalDispatcher(new EnvHttpProxyAgent());
+  if (hasProxyEnv() || isInsecureTlsEnabled()) {
+    setGlobalDispatcher(new EnvHttpProxyAgent(dispatcherOptions()));
   }
+}
+
+function dispatcherOptions() {
+  if (!isInsecureTlsEnabled()) return {};
+  return { connect: { rejectUnauthorized: false } };
+}
+
+function isInsecureTlsEnabled() {
+  return ["1", "true", "yes"].includes(String(process.env.LOCAL_ROUTER_INSECURE_TLS || "").toLowerCase());
 }
 
 function hasProxyEnv() {
