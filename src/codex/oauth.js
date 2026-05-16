@@ -126,9 +126,36 @@ export async function exchangeCode({ code, codeVerifier }) {
 }
 
 export function mapTokenResponse(tokens) {
+  const info = extractCodexAccountInfo(tokens.id_token || tokens.access_token);
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
+    idToken: tokens.id_token,
     expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
+    email: info.email,
+    chatgptAccountId: info.chatgptAccountId,
+    chatgptPlanType: info.chatgptPlanType,
   };
+}
+
+export function extractCodexAccountInfo(idToken) {
+  const payload = decodeJwtPayload(idToken);
+  if (!payload) return {};
+  const chatgpt = payload["https://api.openai.com/auth"] || {};
+  return {
+    email: payload.email,
+    chatgptAccountId: chatgpt.chatgpt_account_id,
+    chatgptPlanType: chatgpt.chatgpt_plan_type,
+  };
+}
+
+function decodeJwtPayload(token) {
+  if (!token || typeof token !== "string") return null;
+  const [, payload] = token.split(".");
+  if (!payload) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
 }

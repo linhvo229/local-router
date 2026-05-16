@@ -1,12 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AccountPool } from "../src/accounts.js";
-import { buildCodexAuthUrl, generatePkce } from "../src/codex/oauth.js";
-import { parseCodexQuota } from "../src/codex/quota.js";
+import { buildCodexAuthUrl, extractCodexAccountInfo, generatePkce, mapTokenResponse } from "../src/codex/oauth.js";
+import { getCodexQuota, parseCodexQuota } from "../src/codex/quota.js";
 import { CodexReauthRequiredError, refreshCodexAccount } from "../src/codex/token.js";
 import { transformCodexRequest, UnsupportedCodexPathError } from "../src/codex/transform.js";
 import { readJson } from "../src/http.js";
 import { globMatch, matchesModel } from "../src/match.js";
+
+function fakeJwt(payload) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none" })}.${encode(payload)}.`;
+}
 
 const config = {
   strategy: "round-robin",
@@ -69,6 +74,39 @@ test("Codex OAuth URL includes PKCE and Codex params", () => {
   assert.equal(authUrl.searchParams.get("client_id"), "app_EMoamEEZ73f0CkXaXp7hrann");
   assert.equal(authUrl.searchParams.get("code_challenge"), "challenge");
   assert.equal(authUrl.searchParams.get("codex_cli_simplified_flow"), "true");
+});
+
+test("Codex token mapping extracts ChatGPT account id", () => {
+  const idToken = fakeJwt({
+    email: "user@example.com",
+    "https://api.openai.com/auth": {
+      chatgpt_account_id: "acct_123",
+      chatgpt_plan_type: "plus",
+    },
+  });
+  assert.deepEqual(extractCodexAccountInfo(idToken), {
+    email: "user@example.com",
+    chatgptAccountId: "acct_123",
+    chatgptPlanType: "plus",
+  });
+  assert.equal(mapTokenResponse({ access_token: "access", refresh_token: "refresh", id_token: idToken }).chatgptAccountId, "acct_123");
+});
+
+test("getCodexQuota sends ChatGPT account id header", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ plan_type: "plus", rate_limit: { session: { remaining_percent: 50 } } }), { status: 200 });
+  };
+  try {
+    const quota = await getCodexQuota("access-token", { accountId: "acct_123" });
+    assert.equal(quota.plan, "plus");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer access-token");
+    assert.equal(calls[0].options.headers["ChatGPT-Account-ID"], "acct_123");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("parseCodexQuota normalizes session and review windows", () => {

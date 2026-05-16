@@ -47,7 +47,11 @@ export async function refreshCodexAccount(account) {
   const mapped = mapTokenResponse(await response.json());
   account.accessToken = mapped.accessToken;
   account.refreshToken = mapped.refreshToken || account.refreshToken;
+  account.idToken = mapped.idToken || account.idToken;
   account.expiresAt = mapped.expiresAt;
+  account.email = mapped.email || account.email;
+  account.chatgptAccountId = mapped.chatgptAccountId || account.chatgptAccountId;
+  account.chatgptPlanType = mapped.chatgptPlanType || account.chatgptPlanType;
   return account;
 }
 

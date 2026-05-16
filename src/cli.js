@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { codexLogin } from "./codex/oauth.js";
+import { codexLogin, extractCodexAccountInfo } from "./codex/oauth.js";
 import { ensureCodexAccessToken } from "./codex/token.js";
 import { getCodexQuota } from "./codex/quota.js";
 
@@ -141,7 +141,11 @@ async function codexLoginCommand(args) {
     authType: "oauth",
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
+    idToken: tokens.idToken,
     expiresAt: tokens.expiresAt,
+    email: tokens.email,
+    chatgptAccountId: tokens.chatgptAccountId,
+    chatgptPlanType: tokens.chatgptPlanType,
     priority: Number(flags.priority || config.accounts.length + 1),
     enabled: true,
     models: { allow: ["gpt-*-codex*"] },
@@ -179,7 +183,8 @@ async function quotaCommand(args) {
   const rows = [];
   for (const account of accounts) {
     const accessToken = await ensureCodexAccessToken(account, { onRefresh: () => writeConfig(config) });
-    const quota = await getCodexQuota(accessToken);
+    const accountId = ensureChatGptAccountId(account, config);
+    const quota = await getCodexQuota(accessToken, { accountId });
     rows.push({ id: account.id, provider: "codex", ...quota });
   }
   if (flags.json) return console.log(JSON.stringify(rows, null, 2));
@@ -188,6 +193,19 @@ async function quotaCommand(args) {
 
 function codexAccounts(config) {
   return (config.accounts || []).filter((account) => (account.provider || "openai") === "codex");
+}
+
+function ensureChatGptAccountId(account, config) {
+  if (account.chatgptAccountId) return account.chatgptAccountId;
+  const info = extractCodexAccountInfo(account.idToken || account.accessToken);
+  if (!info.chatgptAccountId) {
+    throw new Error(`Missing ChatGPT account id for ${account.id}. Run: local-router codex logout --id ${account.id} && local-router codex login --id ${account.id}`);
+  }
+  account.email = account.email || info.email;
+  account.chatgptAccountId = info.chatgptAccountId;
+  account.chatgptPlanType = account.chatgptPlanType || info.chatgptPlanType;
+  writeConfig(config);
+  return account.chatgptAccountId;
 }
 
 function printQuotaRows(rows) {

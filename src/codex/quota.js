@@ -3,18 +3,19 @@ const CODEX_USAGE_ENDPOINTS = [
   "https://chatgpt.com/backend-api/wham/usage",
 ];
 
-export async function getCodexQuota(accessToken, { signal } = {}) {
+export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
   const errors = [];
   for (const endpoint of CODEX_USAGE_ENDPOINTS) {
     try {
       const response = await fetch(endpoint, {
         method: "GET",
-        headers: {
+        headers: cleanHeaders({
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
           originator: "codex-cli",
           "User-Agent": "codex-cli/1.0.18 (macOS; arm64)",
-        },
+          "ChatGPT-Account-ID": accountId,
+        }),
         signal,
       });
       if (response.ok) return parseCodexQuota(await response.json());
@@ -25,6 +26,10 @@ export async function getCodexQuota(accessToken, { signal } = {}) {
     }
   }
   throw new Error(`Codex quota fetch failed: ${errors.join("; ")}`);
+}
+
+function cleanHeaders(headers) {
+  return Object.fromEntries(Object.entries(headers).filter(([, value]) => value != null && value !== ""));
 }
 
 export function parseCodexQuota(data) {
