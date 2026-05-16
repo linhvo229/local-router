@@ -1,5 +1,5 @@
 import dns from "node:dns";
-import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
+import { EnvHttpProxyAgent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 
 let configured = false;
 
@@ -12,12 +12,17 @@ export function configureNetworkFromEnv() {
 
   if (hasProxyEnv() || isInsecureTlsEnabled()) {
     setGlobalDispatcher(new EnvHttpProxyAgent(dispatcherOptions()));
+    globalThis.fetch = undiciFetch;
   }
 }
 
 function dispatcherOptions() {
   if (!isInsecureTlsEnabled()) return {};
-  return { connect: { rejectUnauthorized: false } };
+  return {
+    connect: { rejectUnauthorized: false },
+    proxyTls: { rejectUnauthorized: false },
+    requestTls: { rejectUnauthorized: false },
+  };
 }
 
 function isInsecureTlsEnabled() {
