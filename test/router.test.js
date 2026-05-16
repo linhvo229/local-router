@@ -4,7 +4,7 @@ import { AccountPool } from "../src/accounts.js";
 import { buildCodexAuthUrl, extractCodexAccountInfo, generatePkce, mapTokenResponse } from "../src/codex/oauth.js";
 import { getCodexQuota, parseCodexQuota } from "../src/codex/quota.js";
 import { CodexReauthRequiredError, refreshCodexAccount } from "../src/codex/token.js";
-import { transformCodexRequest, UnsupportedCodexPathError } from "../src/codex/transform.js";
+import { transformCodexRequest } from "../src/codex/transform.js";
 import { readJson } from "../src/http.js";
 import { globMatch, matchesModel } from "../src/match.js";
 
@@ -194,12 +194,17 @@ test("transformCodexRequest forces Codex response shape", () => {
   assert.equal("temperature" in transformed, false);
 });
 
-
-test("Codex chat-completions transform is non-locking client error", () => {
-  assert.throws(
-    () => transformCodexRequest("/v1/chat/completions", { model: "gpt-5.3-codex" }, "gpt-5.3-codex"),
-    (error) => error instanceof UnsupportedCodexPathError && error.statusCode === 400 && error.shouldLockAccount === false,
-  );
+test("transformCodexRequest converts chat completions to responses input", () => {
+  const transformed = transformCodexRequest("/v1/chat/completions", {
+    model: "local-router/gpt-5.3-codex",
+    messages: [
+      { role: "system", content: "be brief" },
+      { role: "user", content: "hello" },
+    ],
+  }, "local-router/gpt-5.3-codex");
+  assert.equal(transformed.model, "gpt-5.3-codex");
+  assert.equal(transformed.instructions, "be brief");
+  assert.deepEqual(transformed.input, [{ type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] }]);
 });
 
 test("Codex refresh classifies unrecoverable errors", async () => {
