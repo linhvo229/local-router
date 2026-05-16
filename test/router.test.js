@@ -186,6 +186,7 @@ test("transformCodexRequest forces Codex response shape", () => {
     input: "hello",
     temperature: 1,
     reasoningSummary: "auto",
+    stream_options: { include_usage: true },
   }, "local-router/gpt-5.3-codex-high");
   assert.equal(transformed.model, "gpt-5.3-codex");
   assert.equal(transformed.stream, true);
@@ -194,6 +195,7 @@ test("transformCodexRequest forces Codex response shape", () => {
   assert.equal("reasoning" in transformed, false);
   assert.equal("reasoningSummary" in transformed, false);
   assert.equal("temperature" in transformed, false);
+  assert.equal("stream_options" in transformed, false);
 });
 
 test("transformCodexRequest converts chat completions to responses input", () => {

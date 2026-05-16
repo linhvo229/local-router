@@ -111,6 +111,8 @@ function stripUnsupported(body) {
     "seed",
     "max_tokens",
     "max_completion_tokens",
+    "stream_options",
+    "steam_options",
   ]) {
     delete body[key];
   }
