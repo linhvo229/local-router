@@ -204,11 +204,22 @@ test("transformCodexRequest converts chat completions to responses input", () =>
     messages: [
       { role: "system", content: "be brief" },
       { role: "user", content: "hello" },
+      { role: "assistant", content: null, tool_calls: [{ id: "call-1", type: "function", function: { name: "read_file", arguments: "{}" } }] },
+      { role: "tool", tool_call_id: "call-1", content: "ok" },
+    ],
+    tools: [
+      { type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } },
+      { type: "request_user_input" },
     ],
   }, "local-router/gpt-5.3-codex");
   assert.equal(transformed.model, "gpt-5.3-codex");
   assert.equal(transformed.instructions, "be brief");
-  assert.deepEqual(transformed.input, [{ type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] }]);
+  assert.deepEqual(transformed.input, [
+    { type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] },
+    { type: "function_call", call_id: "call-1", name: "read_file", arguments: "{}" },
+    { type: "function_call_output", call_id: "call-1", output: "ok" },
+  ]);
+  assert.deepEqual(transformed.tools, [{ type: "function", name: "read_file", description: "Read", parameters: { type: "object", properties: {} }, strict: undefined }]);
   assert.equal("messages" in transformed, false);
 });
 

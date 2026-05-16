@@ -35,16 +35,40 @@ function chatCompletionsToResponses(body) {
       if (text) instructions.push(text);
       continue;
     }
-    input.push({
-      type: "message",
-      role: normalizeRole(message.role),
-      content: toResponseContent(message.content, message.role),
-    });
+    if (message.role === "tool") {
+      input.push({
+        type: "function_call_output",
+        call_id: clampCallId(message.tool_call_id),
+        output: stringifyToolOutput(message.content),
+      });
+      continue;
+    }
+    const content = toResponseContent(message.content, message.role);
+    if (content.length > 0) {
+      input.push({
+        type: "message",
+        role: normalizeRole(message.role),
+        content,
+      });
+    }
+    if (message.role === "assistant" && Array.isArray(message.tool_calls)) {
+      for (const toolCall of message.tool_calls) {
+        const name = toolCall?.function?.name;
+        if (!name || typeof name !== "string" || !name.trim()) continue;
+        input.push({
+          type: "function_call",
+          call_id: clampCallId(toolCall.id),
+          name,
+          arguments: toolCall.function?.arguments || "{}",
+        });
+      }
+    }
   }
   const output = {
     ...body,
     instructions: instructions.join("\n\n") || body.instructions,
     input,
+    tools: normalizeTools(body.tools),
   };
   delete output.messages;
   delete output.input_messages;
@@ -53,6 +77,51 @@ function chatCompletionsToResponses(body) {
 
 function normalizeRole(role) {
   return role === "assistant" ? "assistant" : "user";
+}
+
+function normalizeTools(tools) {
+  if (!Array.isArray(tools)) return undefined;
+  const result = tools.flatMap((tool) => {
+    if (!tool || typeof tool !== "object") return [];
+    if (tool.type === "function" && tool.function) {
+      const name = tool.function.name;
+      if (!name || typeof name !== "string" || !name.trim()) return [];
+      return [{
+        type: "function",
+        name,
+        description: String(tool.function.description || ""),
+        parameters: normalizeToolParameters(tool.function.parameters),
+        strict: tool.function.strict,
+      }];
+    }
+    const name = tool.name;
+    if (!name || typeof name !== "string" || !name.trim()) return [];
+    return [{
+      type: "function",
+      name,
+      description: String(tool.description || ""),
+      parameters: normalizeToolParameters(tool.parameters || tool.input_schema),
+      strict: tool.strict,
+    }];
+  });
+  return result.length ? result : undefined;
+}
+
+function normalizeToolParameters(parameters) {
+  if (!parameters) return { type: "object", properties: {} };
+  if (parameters.type === "object" && !parameters.properties) return { ...parameters, properties: {} };
+  return parameters;
+}
+
+function clampCallId(id) {
+  const value = String(id || "call_unknown");
+  return value.length > 64 ? value.slice(0, 64) : value;
+}
+
+function stringifyToolOutput(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map((part) => part?.text || JSON.stringify(part)).join("");
+  return content == null ? "" : JSON.stringify(content);
 }
 
 function toResponseContent(content, role) {
@@ -67,7 +136,8 @@ function toResponseContent(content, role) {
     });
     return parts.length ? parts : [{ type, text: "" }];
   }
-  return [{ type, text: content == null ? "" : String(content) }];
+  if (content == null) return [];
+  return [{ type, text: String(content) }];
 }
 
 function flattenContent(content) {
