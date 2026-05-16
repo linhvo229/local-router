@@ -102,7 +102,7 @@ function appendQuotaWindows(quotas, prefix, rateLimit) {
   const body = rateLimitBody(rateLimit);
   if (!body) return;
   appendWindow(quotas, prefix ? `${prefix}_session` : "session", body, ["session", "primary", "short"]);
-  appendWindow(quotas, prefix ? `${prefix}_weekly` : "weekly", body, ["weekly", "week", "long"]);
+  appendWindow(quotas, prefix ? `${prefix}_weekly` : "weekly", body, ["weekly", "week", "secondary", "seconday", "second", "long"]);
 }
 
 function rateLimitBody(value) {
