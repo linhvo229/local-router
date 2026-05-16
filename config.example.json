@@ -5,7 +5,7 @@
   },
   "requireApiKey": true,
   "localApiKeys": ["local-router-key-change-me"],
-  "strategy": "round-robin",
+  "strategy": "fill-first",
   "stickyRequests": 3,
   "maxBodyBytes": 26214400,
   "upstream": {
