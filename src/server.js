@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { configureNetworkFromEnv } from "./proxy-env.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { AccountPool } from "./accounts.js";
@@ -11,6 +12,8 @@ import { proxyOpenAI, readUpstreamError } from "./openai.js";
 import { proxyCodex, readCodexError } from "./codex/proxy.js";
 import { ensureCodexAccessToken } from "./codex/token.js";
 import { lowerHeaders, pipeResponse, readJson, sendJson } from "./http.js";
+
+configureNetworkFromEnv();
 
 const BOOT_LOGGER = createLogger({ privacy: { logBodies: false, logHeaders: false } });
 const config = loadConfig(BOOT_LOGGER);
