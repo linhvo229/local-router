@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 export const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 export const CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize";
 export const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
-export const CODEX_SCOPE = "openid profile email offline_access";
+export const CODEX_SCOPE = "openid profile email offline_access api.connectors.read api.connectors.invoke";
 export const CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback";
 
 export function generatePkce() {
