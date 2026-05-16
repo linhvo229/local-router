@@ -1,6 +1,7 @@
 const CODEX_USAGE_ENDPOINTS = [
-  "https://chatgpt.com/backend-api/api/codex/usage",
   "https://chatgpt.com/backend-api/wham/usage",
+  "https://chatgpt.com/backend-api/api/codex/usage",
+  "https://chatgpt.com/backend-api/codex/usage",
 ];
 
 export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
@@ -21,11 +22,18 @@ export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
       if (response.ok) return parseCodexQuota(await response.json());
       errors.push(`${endpoint}: ${response.status} ${await response.text()}`);
     } catch (error) {
-      errors.push(`${endpoint}: ${error.message}`);
+      errors.push(`${endpoint}: ${formatFetchError(error)}`);
       if (error.name === "AbortError") throw error;
     }
   }
   throw new Error(`Codex quota fetch failed: ${errors.join("; ")}`);
+}
+
+function formatFetchError(error) {
+  const details = [error.message];
+  if (error.cause?.code) details.push(error.cause.code);
+  if (error.cause?.message && error.cause.message !== error.message) details.push(error.cause.message);
+  return details.filter(Boolean).join(" - ");
 }
 
 function cleanHeaders(headers) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
+import dns from "node:dns";
 import fs from "node:fs";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -8,6 +9,9 @@ import { ensureCodexAccessToken } from "./codex/token.js";
 import { getCodexQuota } from "./codex/quota.js";
 
 const CONFIG_PATH = process.env.LOCAL_ROUTER_CONFIG || "config.json";
+
+// Prefer IPv4 first because Node fetch can fail on some networks where IPv6 is advertised but unreachable.
+dns.setDefaultResultOrder?.("ipv4first");
 
 async function main() {
   const [command, subcommand, ...args] = process.argv.slice(2);
