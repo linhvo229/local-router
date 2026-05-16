@@ -91,16 +91,9 @@ function normalizeInput(input) {
 }
 
 function ensureReasoning(body) {
-  if (!body.reasoning) {
-    const effort = body.reasoning_effort || "low";
-    body.reasoning = { effort, summary: "auto" };
-  } else if (!body.reasoning.summary) {
-    body.reasoning.summary = "auto";
-  }
-  delete body.reasoning_effort;
-  if (body.reasoning?.effort && body.reasoning.effort !== "none") {
-    body.include = Array.from(new Set([...(body.include || []), "reasoning.encrypted_content"]));
-  }
+  const effort = body.reasoning?.effort || body.reasoning_effort;
+  if (effort && effort !== "none") body.reasoning_effort = effort;
+  delete body.reasoning;
 }
 
 function stripUnsupported(body) {
