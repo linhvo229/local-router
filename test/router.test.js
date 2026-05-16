@@ -97,13 +97,33 @@ test("getCodexQuota sends ChatGPT account id header", async () => {
   const calls = [];
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options });
-    return new Response(JSON.stringify({ plan_type: "plus", rate_limit: { session: { remaining_percent: 50 } } }), { status: 200 });
+    return new Response(JSON.stringify({ plan_type: "plus", rate_limit: { session: { remaining_percent: 50 }, weekly: { remaining_percent: 80 } } }), { status: 200 });
   };
   try {
     const quota = await getCodexQuota("access-token", { accountId: "acct_123" });
     assert.equal(quota.plan, "plus");
     assert.equal(calls[0].options.headers.Authorization, "Bearer access-token");
     assert.equal(calls[0].options.headers["ChatGPT-Account-ID"], "acct_123");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getCodexQuota keeps trying when first endpoint lacks weekly quota", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    if (calls.length === 1) {
+      return new Response(JSON.stringify({ plan_type: "plus", rate_limit: { session: { remaining_percent: 50 } } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ plan_type: "plus", rate_limit: { session: { remaining_percent: 40 }, weekly: { remaining_percent: 70 } } }), { status: 200 });
+  };
+  try {
+    const quota = await getCodexQuota("access-token", { accountId: "acct_123" });
+    assert.equal(calls.length, 2);
+    assert.equal(quota.quotas.session.remaining, 40);
+    assert.equal(quota.quotas.weekly.remaining, 70);
   } finally {
     globalThis.fetch = originalFetch;
   }

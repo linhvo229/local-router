@@ -6,6 +6,7 @@ const CODEX_USAGE_ENDPOINTS = [
 
 export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
   const errors = [];
+  let fallbackQuota = null;
   for (const endpoint of CODEX_USAGE_ENDPOINTS) {
     try {
       const response = await fetch(endpoint, {
@@ -19,14 +20,24 @@ export async function getCodexQuota(accessToken, { accountId, signal } = {}) {
         }),
         signal,
       });
-      if (response.ok) return parseCodexQuota(await response.json());
+      if (response.ok) {
+        const quota = parseCodexQuota(await response.json());
+        if (hasWeeklyQuota(quota)) return quota;
+        fallbackQuota ||= quota;
+        continue;
+      }
       errors.push(`${endpoint}: ${response.status} ${await response.text()}`);
     } catch (error) {
       errors.push(`${endpoint}: ${formatFetchError(error)}`);
       if (error.name === "AbortError") throw error;
     }
   }
+  if (fallbackQuota) return fallbackQuota;
   throw new Error(`Codex quota fetch failed: ${errors.join("; ")}`);
+}
+
+function hasWeeklyQuota(quota) {
+  return Boolean(quota?.quotas?.weekly || quota?.quotas?.review_weekly);
 }
 
 function formatFetchError(error) {
